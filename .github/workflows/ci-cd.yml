@@ -94,6 +94,12 @@ jobs:
       - name: Run tests
         run: mvn test
 
+      - name: Publish JAR to GitHub Packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mvn deploy -DaltDeploymentRepository=github::default::https://maven.pkg.github.com/${{ github.repository_owner }}/my-app
+
       - name: Build and push Docker image
         run: |
           echo "Building Docker image with tag: ${{ secrets.DOCKERHUB_USERNAME }}/simple-java-maven-app:${{ env.new_version }}"
