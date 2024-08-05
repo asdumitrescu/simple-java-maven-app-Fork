@@ -4,7 +4,8 @@ on:
   push:
     branches:
       - master
-      - 'hotfix/v*'
+      - 'feature/*'
+      - 'hotfix/*'
   workflow_dispatch:
 
 jobs:
@@ -31,73 +32,48 @@ jobs:
           echo "/opt/maven/bin" >> $GITHUB_PATH
           rm apache-maven-$MAVEN_VERSION-bin.tar.gz
 
-      - name: Build with Maven
-        run: mvn clean install
-
-      - name: Determine version increment
-        id: version
+      - name: Determine version bump type
+        id: determine_version
         run: |
-          version=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          echo "Current version: $version"
-          if [[ "${GITHUB_REF}" == "refs/heads/master" ]]; then
-            new_version=$(echo $version | awk -F. -v OFS=. '{$NF++; print}')
-          elif [[ "${GITHUB_REF}" == refs/heads/hotfix/v* ]]; then
-            branch_version=$(basename $GITHUB_REF)
-            new_version=${branch_version#hotfix/v}
+          if [[ "$(git log -1 --pretty=%B)" == *"#major"* ]]; then
+            echo "version_type=major" >> $GITHUB_ENV
+          elif [[ "$(git log -1 --pretty=%B)" == *"#minor"* ]]; then
+            echo "version_type=minor" >> $GITHUB_ENV
+          elif [[ "$(git log -1 --pretty=%B)" == *"#patch"* ]]; then
+            echo "version_type=patch" >> $GITHUB_ENV
           else
-            echo "Unsupported branch"
-            exit 1
+            echo "version_type=patch" >> $GITHUB_ENV
           fi
-          echo "New version: $new_version"
-          mvn versions:set -DnewVersion=$new_version
-          mvn versions:commit
-          echo "new_version=$new_version" >> $GITHUB_ENV
 
-      - name: Commit new version
-        run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git pull origin ${{ github.ref }}
-          git add pom.xml
-          git commit -m "Increment version to ${{ env.new_version }}"
-          git push
+      - name: Maven Version Bump
+        id: bump
+        uses: nnichols/maven-version-bump-action@v5
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          type: ${{ env.version_type }}
 
       - name: Print new version
-        run: |
-          echo "New version: ${{ env.new_version }}"
+        run: echo "New version: ${{ steps.bump.outputs.version }}"
 
       - name: Build with Maven
-        run: mvn clean package
+        run: mvn clean install
 
       - name: Run tests
         run: mvn test
 
       - name: Build and push Docker image
         run: |
-          DOCKER_IMAGE_TAG="asdumitrescu/maven-app:${{ env.new_version }}"
-          echo "Building Docker image with tag: $DOCKER_IMAGE_TAG"
+          DOCKER_IMAGE_TAG="asdumitrescu/maven-app:${{ steps.bump.outputs.version }}"
           docker build -t $DOCKER_IMAGE_TAG .
           echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
           docker push $DOCKER_IMAGE_TAG
-
-      - name: Extract JAR from Docker image
-        run: |
-          CONTAINER_ID=$(docker create asdumitrescu/maven-app:${{ env.new_version }})
-          docker cp $CONTAINER_ID:/app/app.jar ./app.jar
-          docker rm $CONTAINER_ID
-
-      - name: Upload JAR to GitHub Packages
-        env:
-          GITHUB_TOKEN: ${{ secrets.PAT_GITLAB_ACTION }}
-        run: |
-          mvn deploy -DskipTests=true -DaltDeploymentRepository=github::default::https://maven.pkg.github.com/asdumitrescu/simple-java-maven-app-Fork
 
       - name: Deploy Docker image to server
         if: github.ref == 'refs/heads/master'
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
-          IMAGE_NAME: asdumitrescu/maven-app:${{ env.new_version }}
+          IMAGE_NAME: asdumitrescu/maven-app:${{ steps.bump.outputs.version }}
           DEPLOY_SERVER_USER: ${{ secrets.DEPLOY_SERVER_USER }}
           DEPLOY_SERVER_IP: ${{ secrets.DEPLOY_SERVER_IP }}
           DEPLOY_SERVER_KEY: ${{ secrets.DEPLOY_SERVER_KEY }}
