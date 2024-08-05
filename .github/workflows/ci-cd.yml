@@ -4,9 +4,9 @@ on:
   push:
     branches:
       - master
-      - 'feature/*'
-      - 'release/*'
-      - 'hotfix/*'
+      - 'feature/v1.1'
+      - 'release/v1'
+      - 'hotfix/v1.1.1'
 
 jobs:
   build:
@@ -43,11 +43,11 @@ jobs:
           BRANCH_NAME=$(echo "${GITHUB_REF#refs/heads/}")
           if [[ "$BRANCH_NAME" == "master" ]]; then
             VERSION_INCREMENT="patch"
-          elif [[ "$BRANCH_NAME" == feature/* ]]; then
+          elif [[ "$BRANCH_NAME" == feature/v1.1 ]]; then
             VERSION_INCREMENT="minor"
-          elif [[ "$BRANCH_NAME" == release/* ]]; then
+          elif [[ "$BRANCH_NAME" == release/v1 ]]; then
             VERSION_INCREMENT="major"
-          elif [[ "$BRANCH_NAME" == hotfix/* ]]; then
+          elif [[ "$BRANCH_NAME" == hotfix/v1.1.1 ]]; then
             VERSION_INCREMENT="patch"
           else
             VERSION_INCREMENT="patch"  # Default to patch for other branches
