@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - master
-      - 'feature/v1.1'
-      - 'release/v1'
-      - 'hotfix/v1.1.1'
   workflow_dispatch:
 
 jobs:
@@ -15,13 +12,13 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v2
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v2
         with:
-          distribution: 'temurin'
           java-version: '17'
+          distribution: 'temurin'
 
       - name: Install Maven
         run: |
@@ -29,52 +26,22 @@ jobs:
           wget https://archive.apache.org/dist/maven/maven-3/$MAVEN_VERSION/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz
           tar -xzf apache-maven-$MAVEN_VERSION-bin.tar.gz
           sudo mv apache-maven-$MAVEN_VERSION /opt/maven
-          if [ ! -L /usr/bin/mvn ]; then
-            sudo ln -s /opt/maven/bin/mvn /usr/bin/mvn
-          fi
-        env:
-          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+          echo "MAVEN_HOME=/opt/maven" >> $GITHUB_ENV
+          echo "/opt/maven/bin" >> $GITHUB_PATH
+          rm apache-maven-$MAVEN_VERSION-bin.tar.gz
 
-      - name: Set Maven path
-        run: echo "/opt/maven/bin" >> $GITHUB_PATH
+      - name: Build with Maven
+        run: mvn clean install
 
-      - name: Determine version increment
+      - name: Increment version
         id: version
         run: |
-          BRANCH_NAME=$(echo "${GITHUB_REF#refs/heads/}")
-          if [[ "$BRANCH_NAME" == "master" ]]; then
-            VERSION_INCREMENT="patch"
-          elif [[ "$BRANCH_NAME" == feature/* ]]; then
-            VERSION_INCREMENT="minor"
-          elif [[ "$BRANCH_NAME" == release/* ]]; then
-            VERSION_INCREMENT="major"
-          elif [[ "$BRANCH_NAME" == hotfix/* ]]; then
-            VERSION_INCREMENT="patch"
-          else
-            VERSION_INCREMENT="patch"  # Default to patch for other branches
-          fi
-          echo "version_increment=$VERSION_INCREMENT" >> $GITHUB_ENV
-
-      - name: Increment version based on branch type
-        run: |
-          current_version=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout | tr -d '\r')
-          IFS='.' read -r -a versionParts <<< "$current_version"
-          if [[ "$VERSION_INCREMENT" == "patch" ]]; then
-            versionParts[2]=$((versionParts[2] + 1))
-          elif [[ "$VERSION_INCREMENT" == "minor" ]]; then
-            versionParts[1]=$((versionParts[1] + 1))
-            versionParts[2]=0
-          elif [[ "$VERSION_INCREMENT" == "major" ]]; then
-            versionParts[0]=$((versionParts[0] + 1))
-            versionParts[1]=0
-            versionParts[2]=0
-          fi
-          new_version="${versionParts[0]}.${versionParts[1]}.${versionParts[2]}"
-          echo "Current version: $current_version"
-          echo "New version: $new_version"
-          echo "new_version=$new_version" >> $GITHUB_ENV
+          version=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          new_version=$(echo $version | awk -F. -v OFS=. '{$NF++; print}')
           mvn versions:set -DnewVersion=$new_version
           mvn versions:commit
+          echo "New version: $new_version"
+          echo "new_version=$new_version" >> $GITHUB_ENV
 
       - name: Commit new version
         run: |
