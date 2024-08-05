@@ -99,18 +99,14 @@ jobs:
           docker cp $CONTAINER_ID:/app/app.jar ./app.jar
           docker rm $CONTAINER_ID
 
-      - name: Push JAR to GitHub Packages
+            - name: Upload JAR to GitHub Packages
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT_GITLAB_ACTION }}
         run: |
-          curl -X POST \
-            -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
-            -H "Content-Type: application/json" \
-            -d '{"name":"my-app","version":"${{ env.new_version }}"}' \
-            https://api.github.com/asdumitrescu/packages/maven/my-app/versions
+          mvn deploy -DskipTests=true -DaltDeploymentRepository=github::default::https://maven.pkg.github.com/asdumitrescu/simple-java-maven-app-Fork
 
-      - name: Deploy Docker image to server
+
+            - name: Deploy Docker image to server
         if: github.ref == 'refs/heads/master'
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -120,11 +116,14 @@ jobs:
           DEPLOY_SERVER_IP: ${{ secrets.DEPLOY_SERVER_IP }}
           DEPLOY_SERVER_KEY: ${{ secrets.DEPLOY_SERVER_KEY }}
         run: |
-          ssh -o StrictHostKeyChecking=no -i ${{ env.DEPLOY_SERVER_KEY }} ${{ env.DEPLOY_SERVER_USER }}@${{ env.DEPLOY_SERVER_IP }} << EOF
+          echo "${{ secrets.DEPLOY_SERVER_KEY }}" > deploy_key.pem
+          chmod 400 deploy_key.pem
+          ssh -o StrictHostKeyChecking=no -i deploy_key.pem ${{ secrets.DEPLOY_SERVER_USER }}@${{ secrets.DEPLOY_SERVER_IP }} << EOF
             echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
             docker pull $IMAGE_NAME
             docker stop myapp || true
             docker rm myapp || true
             docker run -d --name myapp -p 8080:8080 $IMAGE_NAME
           EOF
+
 

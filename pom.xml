@@ -17,6 +17,7 @@
   </dependencies>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.version>${project.version}</maven.version>
   </properties>
   <build>
     <pluginManagement>
@@ -72,5 +73,11 @@
       </plugin>
     </plugins>
   </build>
+  <distributionManagement>
+    <repository>
+      <id>github</id>
+      <url>https://maven.pkg.github.com/asdumitrescu/simple-java-maven-app-Fork</url>
+    </repository>
+  </distributionManagement>
 </project>
 
