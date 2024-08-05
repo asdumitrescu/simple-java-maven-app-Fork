@@ -34,10 +34,6 @@ jobs:
         env:
           JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
 
-      - name: Clean up Maven tar.gz file
-        run: |
-          rm -f apache-maven-3.9.8-bin.tar.gz
-
       - name: Set Maven path
         run: echo "/opt/maven/bin" >> $GITHUB_PATH
 
@@ -78,11 +74,6 @@ jobs:
           echo "new_version=$new_version" >> $GITHUB_ENV
           mvn versions:set -DnewVersion=$new_version
           mvn versions:commit
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add pom.xml
-          git commit -m "Bump version to $new_version"
-          git push
 
       - name: Print new version
         run: |
@@ -93,12 +84,6 @@ jobs:
 
       - name: Run tests
         run: mvn test
-
-      - name: Publish JAR to GitHub Packages
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          mvn deploy -DaltDeploymentRepository=github::default::https://maven.pkg.github.com/${{ github.repository_owner }}/my-app
 
       - name: Build and push Docker image
         run: |
@@ -112,22 +97,16 @@ jobs:
           docker cp $CONTAINER_ID:/app/app.jar ./app.jar
           docker rm $CONTAINER_ID
 
-      - name: Push JAR to GitHub Repository
+      - name: Push JAR to GitHub Packages
         env:
-          PAT_GITLAB_ACTION: ${{ secrets.PAT_GITLAB_ACTION }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ ! -d java-project-semver-artifact ]; then
-            git clone https://x-access-token:${{ secrets.PAT_GITLAB_ACTION }}@github.com/asdumitrescu/java-project-semver-artifact.git
-          else
-            cd java-project-semver-artifact
-            git pull
-            cd ..
-          fi
-          cp app.jar java-project-semver-artifact/
-          cd java-project-semver-artifact
-          git add app.jar
-          git commit -m "Add JAR artifact version ${{ env.new_version }}"
-          git push
+          curl -X POST \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Content-Type: application/json" \
+            -d '{"name":"my-app","version":"${{ env.new_version }}"}' \
+            https://api.github.com/user/packages/maven/my-app/versions
 
       - name: Login to DockerHub
         run: echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
