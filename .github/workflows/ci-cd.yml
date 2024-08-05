@@ -52,10 +52,15 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           type: ${{ env.version_type }}
 
-      - name: Force push changes
+      - name: Delete existing tag if it exists
         run: |
-          git push --force
-          git push --tags --force
+          git tag -d ${{ steps.bump.outputs.version }} || true
+          git push --delete origin ${{ steps.bump.outputs.version }} || true
+
+      - name: Push changes
+        run: |
+          git push
+          git push --tags
 
       - name: Print new version
         run: |
