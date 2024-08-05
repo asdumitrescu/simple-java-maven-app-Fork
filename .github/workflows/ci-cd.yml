@@ -81,8 +81,7 @@ jobs:
           git push
 
       - name: Print new version
-        run: |
-          echo "New version: ${{ env.new_version }}"
+        run: echo "New version: ${{ env.new_version }}"
 
       - name: Build with Maven
         run: mvn clean package
