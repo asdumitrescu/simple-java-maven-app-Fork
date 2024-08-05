@@ -99,14 +99,13 @@ jobs:
           docker cp $CONTAINER_ID:/app/app.jar ./app.jar
           docker rm $CONTAINER_ID
 
-            - name: Upload JAR to GitHub Packages
+      - name: Upload JAR to GitHub Packages
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_GITLAB_ACTION }}
         run: |
           mvn deploy -DskipTests=true -DaltDeploymentRepository=github::default::https://maven.pkg.github.com/asdumitrescu/simple-java-maven-app-Fork
 
-
-            - name: Deploy Docker image to server
+      - name: Deploy Docker image to server
         if: github.ref == 'refs/heads/master'
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -125,5 +124,4 @@ jobs:
             docker rm myapp || true
             docker run -d --name myapp -p 8080:8080 $IMAGE_NAME
           EOF
-
 
