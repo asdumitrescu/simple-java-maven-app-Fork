@@ -4,10 +4,7 @@ on:
   push:
     branches:
       - master
-      - develop
-      - feature/**
-      - release/**
-      - hotfix/**
+      - 'hotfix/v*'
   workflow_dispatch:
 
 jobs:
@@ -37,46 +34,25 @@ jobs:
       - name: Build with Maven
         run: mvn clean install
 
-      - name: Determine version increment
+      - name: Increment version
         id: version
         run: |
-          BRANCH_NAME=$(echo "${GITHUB_REF#refs/heads/}")
-          if [[ "$BRANCH_NAME" == "master" ]]; then
-            VERSION_INCREMENT="patch"
-          elif [[ "$BRANCH_NAME" == "develop" ]]; then
-            VERSION_INCREMENT="minor"
-          elif [[ "$BRANCH_NAME" == release/* ]]; then
-            VERSION_INCREMENT="major"
-          elif [[ "$BRANCH_NAME" == hotfix/* ]]; then
-            VERSION_INCREMENT="patch"
+          version=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          if [[ "${GITHUB_REF}" == "refs/heads/master" ]]; then
+            new_version=$(echo $version | awk -F. -v OFS=. '{$NF++; print}')
+          elif [[ "${GITHUB_REF}" == refs/heads/hotfix/v* ]]; then
+            branch_name=$(basename $GITHUB_REF)
+            new_version=${branch_name#hotfix/v}
           else
-            VERSION_INCREMENT="patch"  # Default to patch for other branches
+            echo "Unsupported branch"
+            exit 1
           fi
-          echo "version_increment=$VERSION_INCREMENT" >> $GITHUB_ENV
-
-      - name: Increment version based on branch type
-        run: |
-          current_version=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout | tr -d '\r')
-          IFS='.' read -r -a versionParts <<< "$current_version"
-          if [[ "$VERSION_INCREMENT" == "patch" ]]; then
-            versionParts[2]=$((versionParts[2] + 1))
-          elif [[ "$VERSION_INCREMENT" == "minor" ]]; then
-            versionParts[1]=$((versionParts[1] + 1))
-            versionParts[2]=0
-          elif [[ "$VERSION_INCREMENT" == "major" ]]; then
-            versionParts[0]=$((versionParts[0] + 1))
-            versionParts[1]=0
-            versionParts[2]=0
-          fi
-          new_version="${versionParts[0]}.${versionParts[1]}.${versionParts[2]}"
-          echo "Current version: $current_version"
-          echo "New version: $new_version"
-          echo "new_version=$new_version" >> $GITHUB_ENV
           mvn versions:set -DnewVersion=$new_version
           mvn versions:commit
+          echo "New version: $new_version"
+          echo "new_version=$new_version" >> $GITHUB_ENV
 
       - name: Commit new version
-        if: github.ref == 'refs/heads/master'
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
