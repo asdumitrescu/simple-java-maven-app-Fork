@@ -95,7 +95,7 @@ jobs:
 
       - name: Extract JAR from Docker image
         run: |
-          CONTAINER_ID=$(docker create asdumitresc/reponame:${{ env.new_version }})
+          CONTAINER_ID=$(docker create asdumitrescu/maven-app:${{ env.new_version }})
           docker cp $CONTAINER_ID:/app/app.jar ./app.jar
           docker rm $CONTAINER_ID
 
