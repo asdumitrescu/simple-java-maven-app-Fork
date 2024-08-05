@@ -4,8 +4,7 @@ on:
   push:
     branches:
       - master
-      - 'feature/*'
-      - 'hotfix/*'
+      - 'hotfix/v*'
   workflow_dispatch:
 
 jobs:
@@ -32,63 +31,80 @@ jobs:
           echo "/opt/maven/bin" >> $GITHUB_PATH
           rm apache-maven-$MAVEN_VERSION-bin.tar.gz
 
-      - name: Determine version bump type
-        id: determine_version
+      - name: Build with Maven
+        run: mvn clean install
+
+      - name: Determine version increment
+        id: version
         run: |
-          if [[ "$(git log -1 --pretty=%B)" == *"#major"* ]]; then
-            echo "version_type=major" >> $GITHUB_ENV
-          elif [[ "$(git log -1 --pretty=%B)" == *"#minor"* ]]; then
-            echo "version_type=minor" >> $GITHUB_ENV
-          elif [[ "$(git log -1 --pretty=%B)" == *"#patch"* ]]; then
-            echo "version_type=patch" >> $GITHUB_ENV
+          version=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          echo "Current version: $version"
+          if [[ "${GITHUB_REF}" == "refs/heads/master" ]]; then
+            new_version=$(echo $version | awk -F. -v OFS=. '{$NF++; print}')
+          elif [[ "${GITHUB_REF}" == refs/heads/hotfix/v* ]]; then
+            branch_version=$(basename $GITHUB_REF)
+            new_version=${branch_version#hotfix/v}
           else
-            echo "version_type=patch" >> $GITHUB_ENV
+            echo "Unsupported branch"
+            exit 1
           fi
+          echo "New version: $new_version"
+          mvn versions:set -DnewVersion=$new_version
+          mvn versions:commit
+          echo "new_version=$new_version" >> $GITHUB_ENV
 
-     
-      - name: Maven Version Bump
-        id: bump
-        uses: nnichols/maven-version-bump-action@v5
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          type: ${{ env.version_type }}
-
-      - name: Push changes
+      - name: Commit new version
         run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git pull --rebase origin ${{ github.ref }}
+          git add pom.xml
+          git commit -m "Increment version to ${{ env.new_version }}"
           git push
-          git push --tags
 
       - name: Print new version
         run: |
-          echo "New version: ${{ steps.bump.outputs.version }}"
+          echo "New version: ${{ env.new_version }}"
 
       - name: Build with Maven
-        run: mvn clean install
+        run: mvn clean package
 
       - name: Run tests
         run: mvn test
 
-
       - name: Build and push Docker image
         run: |
-          DOCKER_IMAGE_TAG="asdumitrescu/maven-app:${{ steps.bump.outputs.version }}"
+          DOCKER_IMAGE_TAG="asdumitrescu/maven-app:${{ env.new_version }}"
+          echo "Building Docker image with tag: $DOCKER_IMAGE_TAG"
           docker build -t $DOCKER_IMAGE_TAG .
           echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
           docker push $DOCKER_IMAGE_TAG
+
+      - name: Extract JAR from Docker image
+        run: |
+          CONTAINER_ID=$(docker create asdumitrescu/maven-app:${{ env.new_version }})
+          docker cp $CONTAINER_ID:/app/app.jar ./app.jar
+          docker rm $CONTAINER_ID
+
+      - name: Upload JAR to GitHub Packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_GITLAB_ACTION }}
+        run: |
+          mvn deploy -DskipTests=true -DaltDeploymentRepository=github::default::https://maven.pkg.github.com/asdumitrescu/simple-java-maven-app-Fork
 
       - name: Deploy Docker image to server
         if: github.ref == 'refs/heads/master'
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
-          IMAGE_NAME: asdumitrescu/maven-app:${{ steps.bump.outputs.version }}
+          IMAGE_NAME: asdumitrescu/maven-app:${{ env.new_version }}
           DEPLOY_SERVER_USER: ${{ secrets.DEPLOY_SERVER_USER }}
           DEPLOY_SERVER_IP: ${{ secrets.DEPLOY_SERVER_IP }}
           DEPLOY_SERVER_KEY: ${{ secrets.DEPLOY_SERVER_KEY }}
         run: |
           echo "${{ secrets.DEPLOY_SERVER_KEY }}" > deploy_key.pem
           chmod 400 deploy_key.pem
-          ssh -v -t -o StrictHostKeyChecking=no -i deploy_key.pem ${{ secrets.DEPLOY_SERVER_USER }}@${{ secrets.DEPLOY_SERVER_IP }} << EOF
+          ssh -o StrictHostKeyChecking=no -i deploy_key.pem ${{ secrets.DEPLOY_SERVER_USER }}@${{ secrets.DEPLOY_SERVER_IP }} << EOF
             echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
             docker pull $IMAGE_NAME
             docker stop myapp || true
