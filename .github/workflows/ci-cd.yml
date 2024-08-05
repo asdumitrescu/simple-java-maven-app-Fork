@@ -34,6 +34,9 @@ jobs:
       env:
         JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
 
+    - name: Set Maven path
+      run: echo "/opt/maven/bin" >> $GITHUB_PATH
+
     - name: Determine version increment
       id: version
       run: |
