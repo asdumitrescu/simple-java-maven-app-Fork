@@ -43,11 +43,11 @@ jobs:
           BRANCH_NAME=$(echo "${GITHUB_REF#refs/heads/}")
           if [[ "$BRANCH_NAME" == "master" ]]; then
             VERSION_INCREMENT="patch"
-          elif [[ "$BRANCH_NAME" == feature/v1.1 ]]; then
+          elif [[ "$BRANCH_NAME" == feature/* ]]; then
             VERSION_INCREMENT="minor"
-          elif [[ "$BRANCH_NAME" == release/v1 ]]; then
+          elif [[ "$BRANCH_NAME" == release/* ]]; then
             VERSION_INCREMENT="major"
-          elif [[ "$BRANCH_NAME" == hotfix/v1.1.1 ]]; then
+          elif [[ "$BRANCH_NAME" == hotfix/* ]]; then
             VERSION_INCREMENT="patch"
           else
             VERSION_INCREMENT="patch"  # Default to patch for other branches
@@ -56,7 +56,7 @@ jobs:
 
       - name: Increment version based on branch type
         run: |
-          current_version=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          current_version=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout | tr -d '\r')
           IFS='.' read -r -a versionParts <<< "$current_version"
           if [[ "$VERSION_INCREMENT" == "patch" ]]; then
             versionParts[2]=$((versionParts[2] + 1))
@@ -76,8 +76,7 @@ jobs:
           mvn versions:commit
 
       - name: Print new version
-        run: |
-          echo "New version: ${{ env.new_version }}"
+        run: echo "New version: ${{ env.new_version }}"
 
       - name: Build with Maven
         run: mvn clean package
