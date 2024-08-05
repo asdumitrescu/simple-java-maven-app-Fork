@@ -7,6 +7,7 @@ on:
       - 'feature/v1.1'
       - 'release/v1'
       - 'hotfix/v1.1.1'
+  workflow_dispatch:
 
 jobs:
   build:
@@ -76,8 +77,8 @@ jobs:
           mvn versions:commit
 
       - name: Print new version
-        run: echo "New version: ${{ env.new_version }}"
-
+        run: |
+          echo "New version: ${{ env.new_version }}"
       - name: Build with Maven
         run: mvn clean package
 
