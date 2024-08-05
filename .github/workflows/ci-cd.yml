@@ -50,7 +50,7 @@ jobs:
           elif [[ "$BRANCH_NAME" == hotfix/* ]]; then
             VERSION_INCREMENT="patch"
           else
-            VERSION_INCREMENT="patch"
+            VERSION_INCREMENT="patch"  # Default to patch for other branches
           fi
           echo "version_increment=$VERSION_INCREMENT" >> $GITHUB_ENV
 
@@ -115,7 +115,7 @@ jobs:
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
-          IMAGE_NAME: asdumitresc/reponame:${{ env.new_version }}
+          IMAGE_NAME: asdumitrescu/maven-app:${{ env.new_version }}
           DEPLOY_SERVER_USER: ${{ secrets.DEPLOY_SERVER_USER }}
           DEPLOY_SERVER_IP: ${{ secrets.DEPLOY_SERVER_IP }}
           DEPLOY_SERVER_KEY: ${{ secrets.DEPLOY_SERVER_KEY }}
