@@ -52,6 +52,11 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           type: ${{ env.version_type }}
 
+      - name: Force push changes
+        run: |
+          git push --force
+          git push --tags --force
+
       - name: Print new version
         run: |
           echo "New version: ${{ steps.bump.outputs.version }}"
@@ -68,7 +73,6 @@ jobs:
           docker build -t $DOCKER_IMAGE_TAG .
           echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
           docker push $DOCKER_IMAGE_TAG
-
 
       - name: Deploy Docker image to server
         if: github.ref == 'refs/heads/master'
