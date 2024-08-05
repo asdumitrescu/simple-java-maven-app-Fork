@@ -74,14 +74,14 @@ jobs:
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
-          IMAGE_NAME: asdumitrescu/maven-app:${{ steps.bump.outputs.version }}
+          IMAGE_NAME: asdumitrescu/maven-app:${{ env.new_version }}
           DEPLOY_SERVER_USER: ${{ secrets.DEPLOY_SERVER_USER }}
           DEPLOY_SERVER_IP: ${{ secrets.DEPLOY_SERVER_IP }}
           DEPLOY_SERVER_KEY: ${{ secrets.DEPLOY_SERVER_KEY }}
         run: |
           echo "${{ secrets.DEPLOY_SERVER_KEY }}" > deploy_key.pem
           chmod 400 deploy_key.pem
-          ssh -t -o StrictHostKeyChecking=no -i deploy_key.pem ${{ secrets.DEPLOY_SERVER_USER }}@${{ secrets.DEPLOY_SERVER_IP }} << 'EOF'
+          ssh -o StrictHostKeyChecking=no -i deploy_key.pem ${{ secrets.DEPLOY_SERVER_USER }}@${{ secrets.DEPLOY_SERVER_IP }} << EOF
             echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
             docker pull $IMAGE_NAME
             docker stop myapp || true
