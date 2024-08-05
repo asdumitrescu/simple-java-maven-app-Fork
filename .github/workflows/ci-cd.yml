@@ -108,7 +108,7 @@ jobs:
             -H "Accept: application/vnd.github.v3+json" \
             -H "Content-Type: application/json" \
             -d '{"name":"my-app","version":"${{ env.new_version }}"}' \
-            https://api.github.com/user/packages/maven/my-app/versions
+            https://api.github.com/asdumitrescu/packages/maven/my-app/versions
 
       - name: Deploy Docker image to server
         if: github.ref == 'refs/heads/master'
