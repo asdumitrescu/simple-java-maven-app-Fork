@@ -34,6 +34,10 @@ jobs:
         env:
           JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
 
+      - name: Clean up Maven tar.gz file
+        run: |
+          rm -f apache-maven-3.9.8-bin.tar.gz
+
       - name: Set Maven path
         run: echo "/opt/maven/bin" >> $GITHUB_PATH
 
@@ -81,8 +85,7 @@ jobs:
           git push
 
       - name: Print new version
-        run: |
-          echo "New version: ${{ env.new_version }}"
+        run: echo "New version: ${{ env.new_version }}"
 
       - name: Build with Maven
         run: mvn clean package
