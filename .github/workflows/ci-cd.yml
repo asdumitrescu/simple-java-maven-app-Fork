@@ -72,9 +72,12 @@ jobs:
           echo "Current version: $current_version"
           echo "New version: $new_version"
           echo "new_version=$new_version" >> $GITHUB_ENV
+          mvn versions:set -DnewVersion=$new_version
+          mvn versions:commit
           git config --global user.name 'github-actions[bot]'
           git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -am "Bump version to $new_version"
+          git add pom.xml
+          git commit -m "Bump version to $new_version"
           git push
 
       - name: Print new version
