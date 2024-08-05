@@ -87,13 +87,15 @@ jobs:
 
       - name: Build and push Docker image
         run: |
-          echo "Building Docker image with tag: ${{ secrets.DOCKERHUB_USERNAME }}/simple-java-maven-app:${{ env.new_version }}"
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/simple-java-maven-app:${{ env.new_version }} .
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/simple-java-maven-app:${{ env.new_version }}
+          DOCKER_IMAGE_TAG="asdumitrescu/maven-app:${{ env.new_version }}"
+          echo "Building Docker image with tag: $DOCKER_IMAGE_TAG"
+          docker build -t $DOCKER_IMAGE_TAG .
+          echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+          docker push $DOCKER_IMAGE_TAG
 
       - name: Extract JAR from Docker image
         run: |
-          CONTAINER_ID=$(docker create ${{ secrets.DOCKERHUB_USERNAME }}/simple-java-maven-app:${{ env.new_version }})
+          CONTAINER_ID=$(docker create asdumitresc/reponame:${{ env.new_version }})
           docker cp $CONTAINER_ID:/app/app.jar ./app.jar
           docker rm $CONTAINER_ID
 
@@ -108,15 +110,12 @@ jobs:
             -d '{"name":"my-app","version":"${{ env.new_version }}"}' \
             https://api.github.com/user/packages/maven/my-app/versions
 
-      - name: Login to DockerHub
-        run: echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
-
       - name: Deploy Docker image to server
         if: github.ref == 'refs/heads/master'
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
-          IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/simple-java-maven-app:${{ env.new_version }}
+          IMAGE_NAME: asdumitresc/reponame:${{ env.new_version }}
           DEPLOY_SERVER_USER: ${{ secrets.DEPLOY_SERVER_USER }}
           DEPLOY_SERVER_IP: ${{ secrets.DEPLOY_SERVER_IP }}
           DEPLOY_SERVER_KEY: ${{ secrets.DEPLOY_SERVER_KEY }}
