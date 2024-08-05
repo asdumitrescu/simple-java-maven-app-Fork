@@ -28,7 +28,9 @@ jobs:
         wget https://archive.apache.org/dist/maven/maven-3/$MAVEN_VERSION/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz
         tar -xzf apache-maven-$MAVEN_VERSION-bin.tar.gz
         sudo mv apache-maven-$MAVEN_VERSION /opt/maven
-        sudo ln -s /opt/maven/bin/mvn /usr/bin/mvn
+        if [ ! -L /usr/bin/mvn ]; then
+          sudo ln -s /opt/maven/bin/mvn /usr/bin/mvn
+        fi
       env:
         JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
 
