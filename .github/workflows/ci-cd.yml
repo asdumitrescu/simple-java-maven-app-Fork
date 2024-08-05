@@ -45,14 +45,7 @@ jobs:
             echo "version_type=patch" >> $GITHUB_ENV
           fi
 
-      - name: Delete existing tag if it exists
-        run: |
-          git fetch --tags
-          if git rev-parse ${{ env.new_version }} >/dev/null 2>&1; then
-            git tag -d ${{ env.new_version }}
-            git push --delete origin ${{ env.new_version }}
-          fi
-
+     
       - name: Maven Version Bump
         id: bump
         uses: nnichols/maven-version-bump-action@v5
