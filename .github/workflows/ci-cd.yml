@@ -25,8 +25,8 @@ jobs:
     - name: Install Maven
       run: |
         MAVEN_VERSION=3.9.2
-        curl -O https://downloads.apache.org/maven/maven-3/$MAVEN_VERSION/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz
-        tar xzvf apache-maven-$MAVEN_VERSION-bin.tar.gz
+        wget https://downloads.apache.org/maven/maven-3/$MAVEN_VERSION/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz
+        tar -xzf apache-maven-$MAVEN_VERSION-bin.tar.gz
         sudo mv apache-maven-$MAVEN_VERSION /opt/maven
         sudo ln -s /opt/maven/bin/mvn /usr/bin/mvn
       env:
