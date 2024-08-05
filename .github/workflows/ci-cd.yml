@@ -53,11 +53,22 @@ jobs:
           mvn versions:commit
           echo "new_version=$new_version" >> $GITHUB_ENV
 
-      - name: Commit new version
+      - name: Stash changes
+        run: |
+          git stash --include-untracked
+
+      - name: Pull changes with rebase
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           git pull --rebase origin ${{ github.ref }}
+
+      - name: Apply stashed changes
+        run: |
+          git stash pop || true
+
+      - name: Commit new version
+        run: |
           git add pom.xml
           git commit -m "Increment version to ${{ env.new_version }}"
           git push
