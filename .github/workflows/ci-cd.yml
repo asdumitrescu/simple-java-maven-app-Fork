@@ -34,28 +34,30 @@ jobs:
       - name: Build with Maven
         run: mvn clean install
 
-      - name: Increment version
+      - name: Determine version increment
         id: version
         run: |
           version=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          echo "Current version: $version"
           if [[ "${GITHUB_REF}" == "refs/heads/master" ]]; then
             new_version=$(echo $version | awk -F. -v OFS=. '{$NF++; print}')
           elif [[ "${GITHUB_REF}" == refs/heads/hotfix/v* ]]; then
-            branch_name=$(basename $GITHUB_REF)
-            new_version=${branch_name#hotfix/v}
+            branch_version=$(basename $GITHUB_REF)
+            new_version=${branch_version#hotfix/v}
           else
             echo "Unsupported branch"
             exit 1
           fi
+          echo "New version: $new_version"
           mvn versions:set -DnewVersion=$new_version
           mvn versions:commit
-          echo "New version: $new_version"
           echo "new_version=$new_version" >> $GITHUB_ENV
 
       - name: Commit new version
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git pull origin ${{ github.ref }}
           git add pom.xml
           git commit -m "Increment version to ${{ env.new_version }}"
           git push
