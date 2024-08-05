@@ -68,6 +68,7 @@ jobs:
       - name: Run tests
         run: mvn test
 
+
       - name: Build and push Docker image
         run: |
           DOCKER_IMAGE_TAG="asdumitrescu/maven-app:${{ steps.bump.outputs.version }}"
