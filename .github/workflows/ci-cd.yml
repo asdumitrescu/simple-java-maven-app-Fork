@@ -81,17 +81,17 @@ jobs:
         run: |
           mvn deploy -DskipTests=true -DaltDeploymentRepository=github::default::https://maven.pkg.github.com/asdumitrescu/simple-java-maven-app-Fork
 
+      - name: Create Docker context
+        run: |
+          docker context create my-remote-context --docker "host=tcp://${{ secrets.SERVER_IP }}:2376"
+
       - name: Deploy Docker image to server
         if: github.ref == 'refs/heads/master'
         env:
-          SERVER_IP: ${{ secrets.SERVER_IP }}
-          DOCKER_CONTEXT_CONFIG: ${{ secrets.DOCKER_CONTEXT_CONFIG }}
           IMAGE_NAME: asdumitrescu/maven-app:${{ steps.bump_version.outputs.version }}
         run: |
-          echo "${{ secrets.DOCKER_CONTEXT_CONFIG }}" > docker-deploy-github.json
-          docker context import docker-deploy-github docker-deploy-github.json
-          docker --context docker-deploy-github --host tcp://${{ secrets.SERVER_IP }}:2376 pull $IMAGE_NAME
-          docker --context docker-deploy-github --host tcp://${{ secrets.SERVER_IP }}:2376 stop myapp || true
-          docker --context docker-deploy-github --host tcp://${{ secrets.SERVER_IP }}:2376 rm myapp || true
-          docker --context docker-deploy-github --host tcp://${{ secrets.SERVER_IP }}:2376 run -d --name myapp -p 8080:8080 $IMAGE_NAME
+          docker --context my-remote-context pull $IMAGE_NAME
+          docker --context my-remote-context stop myapp || true
+          docker --context my-remote-context rm myapp || true
+          docker --context my-remote-context run -d --name myapp -p 8080:8080 $IMAGE_NAME
 
