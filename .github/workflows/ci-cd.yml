@@ -86,16 +86,13 @@ jobs:
           echo "${{ secrets.CA_PEM }}" > ca.pem
           echo "${{ secrets.CLIENT_CERT_PEM }}" > cert.pem
           echo "${{ secrets.CLIENT_KEY_PEM }}" > key.pem
-          docker context create my-remote-context --docker "host=tcp://${{ secrets.SERVER_IP }}:2376,ca=ca.pem,cert=cert.pem,key=key.pem,tls=true" --description "Remote context"
+          docker context create my-remote-context --docker "host=tcp://${{ secrets.SERVER_IP }}:2376,ca=./ca.pem,cert=./cert.pem,key=./key.pem" --description "Remote context"
           docker context ls
           docker context inspect my-remote-context
 
       - name: Deploy Docker image to server
         if: github.ref == 'refs/heads/master'
         env:
-          DOCKER_CERT_PATH: ${{ github.workspace }}
-          DOCKER_TLS_VERIFY: 1
-          DOCKER_HOST: tcp://${{ secrets.SERVER_IP }}:2376
           IMAGE_NAME: asdumitrescu/maven-app:${{ steps.bump_version.outputs.version }}
         run: |
           echo "Pulling image: $IMAGE_NAME"
@@ -110,8 +107,10 @@ jobs:
       - name: Check Docker daemon info
         if: failure()
         run: |
-          docker --context my-remote-context version
-          docker --context my-remote-context info
+          docker context ls
+          docker context inspect my-remote-context
+          docker --context my-remote-context version || true
+          docker --context my-remote-context info || true
 
       - name: Debug connection
         if: failure()
