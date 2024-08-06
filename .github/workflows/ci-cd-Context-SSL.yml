@@ -1,0 +1,137 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - master
+      - 'hotfix/v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    concurrency: ci-cd-pipeline-${{ github.ref }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v2
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Install Maven
+        run: |
+          MAVEN_VERSION=3.9.8
+          wget https://archive.apache.org/dist/maven/maven-3/$MAVEN_VERSION/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz
+          tar -xzf apache-maven-$MAVEN_VERSION-bin.tar.gz
+          sudo mv apache-maven-$MAVEN_VERSION /opt/maven
+          echo "MAVEN_HOME=/opt/maven" >> $GITHUB_ENV
+          echo "/opt/maven/bin" >> $GITHUB_PATH
+          rm apache-maven-$MAVEN_VERSION-bin.tar.gz
+
+      - name: Check for existing lock file
+        id: check_lock
+        run: |
+          if [ -f ".github/ci.lock" ]; then
+            echo "Another CI process is running. Exiting."
+            exit 1
+          fi
+          touch .github/ci.lock
+
+      - name: Build with Maven
+        run: mvn clean install
+
+      - name: Maven Version Bump Action
+        id: bump_version
+        uses: nnichols/maven-version-bump-action@v5
+        with:
+          release-type: patch
+
+      - name: Commit new version
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add pom.xml
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "Increment version to ${{ steps.bump_version.outputs.version }}"
+            git push
+          else
+            echo "No changes to commit"
+          fi
+
+      - name: Print new version
+        run: |
+          echo "New version: ${{ steps.bump_version.outputs.version }}"
+
+      - name: Build with Maven
+        run: mvn clean package
+
+      - name: Run tests
+        run: mvn test
+
+      - name: Build and push Docker image
+        env:
+          DOCKER_IMAGE_TAG: asdumitrescu/maven-app:${{ steps.bump_version.outputs.version }}
+        run: |
+          echo "Building Docker image with tag: $DOCKER_IMAGE_TAG"
+          docker build -t $DOCKER_IMAGE_TAG .
+          echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+          docker push $DOCKER_IMAGE_TAG
+
+      - name: Extract JAR from Docker image
+        run: |
+          CONTAINER_ID=$(docker create asdumitrescu/maven-app:${{ steps.bump_version.outputs.version }})
+          docker cp $CONTAINER_ID:/app/app.jar ./app.jar
+          docker rm $CONTAINER_ID
+
+      - name: Upload JAR to GitHub Packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_GITLAB_ACTION }}
+        run: |
+          mvn deploy -DskipTests=true -DaltDeploymentRepository=github::default::https://maven.pkg.github.com/asdumitrescu/simple-java-maven-app-Fork
+
+      - name: Create Docker context
+        run: |
+          echo "${{ secrets.CA_PEM }}" > ca.pem
+          echo "${{ secrets.CLIENT_CERT_PEM }}" > cert.pem
+          echo "${{ secrets.CLIENT_KEY_PEM }}" > key.pem
+          docker context create my-remote-context --docker "host=tcp://${{ secrets.SERVER_IP }}:2376,ca=./ca.pem,cert=./cert.pem,key=./key.pem" --description "Remote context"
+          docker context ls
+          docker context inspect my-remote-context
+
+      - name: Deploy Docker image to server
+        if: github.ref == 'refs/heads/master'
+        env:
+          IMAGE_NAME: asdumitrescu/maven-app:${{ steps.bump_version.outputs.version }}
+        run: |
+          echo "Pulling image: $IMAGE_NAME"
+          docker --context my-remote-context pull $IMAGE_NAME
+          echo "Stopping existing container (if any)"
+          docker --context my-remote-context stop myapp || true
+          echo "Removing existing container (if any)"
+          docker --context my-remote-context rm myapp || true
+          echo "Running new container"
+          docker --context my-remote-context run -d --name myapp -p 8080:8080 $IMAGE_NAME
+
+      - name: Check Docker daemon info
+        if: failure()
+        run: |
+          docker context ls
+          docker context inspect my-remote-context
+          docker --context my-remote-context version || true
+          docker --context my-remote-context info || true
+
+      - name: Debug connection
+        if: failure()
+        run: |
+          nc -zv ${{ secrets.SERVER_IP }} 2376
+          openssl s_client -connect ${{ secrets.SERVER_IP }}:2376 -cert cert.pem -key key.pem -CAfile ca.pem -servername ${{ secrets.SERVER_IP }}
+
+      - name: Remove lock file
+        if: always()
+        run: |
+          rm -f .github/ci.lock
+
