@@ -86,7 +86,7 @@ jobs:
           echo "${{ secrets.CA_PEM }}" > ca.pem
           echo "${{ secrets.CLIENT_CERT_PEM }}" > cert.pem
           echo "${{ secrets.CLIENT_KEY_PEM }}" > key.pem
-          docker context create my-remote-context --docker "host=tcp://${{ secrets.SERVER_IP }}:2376,ca=ca.pem,cert=cert.pem,key=key.pem" --description "Remote context"
+          docker context create my-remote-context --docker "host=tcp://${{ secrets.SERVER_IP }}:2376,ca=ca.pem,cert=cert.pem,key=key.pem,tls=true" --description "Remote context"
           docker context ls
           docker context inspect my-remote-context
 
@@ -99,7 +99,7 @@ jobs:
           IMAGE_NAME: asdumitrescu/maven-app:${{ steps.bump_version.outputs.version }}
         run: |
           echo "Pulling image: $IMAGE_NAME"
-          docker --context my-remote-context --debug pull $IMAGE_NAME
+          docker --context my-remote-context pull $IMAGE_NAME
           echo "Stopping existing container (if any)"
           docker --context my-remote-context stop myapp || true
           echo "Removing existing container (if any)"
@@ -117,4 +117,4 @@ jobs:
         if: failure()
         run: |
           nc -zv ${{ secrets.SERVER_IP }} 2376
-          openssl s_client -connect ${{ secrets.SERVER_IP }}:2376 -cert cert.pem -key key.pem -CAfile ca.pem
+          openssl s_client -connect ${{ secrets.SERVER_IP }}:2376 -cert cert.pem -key key.pem -CAfile ca.pem -servername ${{ secrets.SERVER_IP }}
