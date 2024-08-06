@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - master
-      - 'hotfix/v*'
   workflow_dispatch:
 
 jobs:
@@ -34,44 +33,34 @@ jobs:
       - name: Build with Maven
         run: mvn clean install
 
-      - name: Determine version increment
+      - name: Get commit message
+        id: commit_message
+        run: |
+          commit_message=$(git log -1 --pretty=%B)
+          echo "Commit message: $commit_message"
+          echo "commit_message=$commit_message" >> $GITHUB_ENV
+
+      - name: Determine and set new version
         id: version
         run: |
           version=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           echo "Current version: $version"
-          if [[ "${GITHUB_REF}" == "refs/heads/master" ]]; then
-            new_version=$(echo $version | awk -F. -v OFS=. '{$NF++; print}')
-          elif [[ "${GITHUB_REF}" == refs/heads/hotfix/v* ]]; then
-            branch_version=$(basename $GITHUB_REF)
-            new_version=${branch_version#hotfix/v}
+
+          if [[ "$commit_message" == *"#major"* ]]; then
+            mvn versions:increment -DnewVersion=major
+          elif [[ "$commit_message" == *"#minor"* ]]; then
+            mvn versions:increment -DnewVersion=minor
+          elif [[ "$commit_message" == *"#patch"* ]]; then
+            mvn versions:increment -DnewVersion=patch
           else
-            echo "Unsupported branch"
+            echo "No valid increment specified in commit message. Exiting."
             exit 1
           fi
-          echo "New version: $new_version"
-          mvn versions:set -DnewVersion=$new_version
+          
           mvn versions:commit
+          new_version=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          echo "New version: $new_version"
           echo "new_version=$new_version" >> $GITHUB_ENV
-
-      - name: Stash changes
-        run: |
-          git stash --include-untracked
-
-      - name: Pull changes with rebase
-        run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git pull --rebase origin ${{ github.ref }}
-
-      - name: Apply stashed changes
-        run: |
-          git stash pop || true
-
-      - name: Commit new version
-        run: |
-          git add pom.xml
-          git commit -m "Increment version to ${{ env.new_version }}"
-          git push
 
       - name: Print new version
         run: |
@@ -90,7 +79,6 @@ jobs:
           docker build -t $DOCKER_IMAGE_TAG .
           echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
           docker push $DOCKER_IMAGE_TAG
-
 
       - name: Extract JAR from Docker image
         run: |
