@@ -93,8 +93,10 @@ jobs:
         env:
           IMAGE_NAME: asdumitrescu/maven-app:${{ steps.bump_version.outputs.version }}
         run: |
-          docker --context my-remote-context --tlsverify --tlscacert=ca.pem --tlscert=client-cert.pem --tlskey=client-key.pem pull $IMAGE_NAME
-          docker --context my-remote-context --tlsverify --tlscacert=ca.pem --tlscert=client-cert.pem --tlskey=client-key.pem stop myapp || true
-          docker --context my-remote-context --tlsverify --tlscacert=ca.pem --tlscert=client-cert.pem --tlskey=client-key.pem rm myapp || true
-          docker --context my-remote-context --tlsverify --tlscacert=ca.pem --tlscert=client-cert.pem --tlskey=client-key.pem run -d --name myapp -p 8080:8080 $IMAGE_NAME
+          export DOCKER_CERT_PATH=$(pwd)
+          export DOCKER_TLS_VERIFY=1
+          docker --context my-remote-context pull $IMAGE_NAME
+          docker --context my-remote-context stop myapp || true
+          docker --context my-remote-context rm myapp || true
+          docker --context my-remote-context run -d --name myapp -p 8080:8080 $IMAGE_NAME
 
