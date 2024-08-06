@@ -1,17 +1,14 @@
 name: CI/CD Pipeline
-
 on:
   push:
     branches:
       - master
       - 'hotfix/v*'
   workflow_dispatch:
-
 jobs:
   build:
     runs-on: ubuntu-latest
     concurrency: ci-cd-pipeline-${{ github.ref }}
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -43,6 +40,8 @@ jobs:
 
       - name: Commit new version
         run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
           git add pom.xml
           if ! git diff-index --quiet HEAD; then
             git commit -m "Increment version to ${{ steps.bump_version.outputs.version }}"
@@ -62,8 +61,9 @@ jobs:
         run: mvn test
 
       - name: Build and push Docker image
+        env:
+          DOCKER_IMAGE_TAG: asdumitrescu/maven-app:${{ steps.bump_version.outputs.version }}
         run: |
-          DOCKER_IMAGE_TAG="asdumitrescu/maven-app:${{ steps.bump_version.outputs.version }}"
           echo "Building Docker image with tag: $DOCKER_IMAGE_TAG"
           docker build -t $DOCKER_IMAGE_TAG .
           echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
@@ -86,18 +86,35 @@ jobs:
           echo "${{ secrets.CA_PEM }}" > ca.pem
           echo "${{ secrets.CLIENT_CERT_PEM }}" > cert.pem
           echo "${{ secrets.CLIENT_KEY_PEM }}" > key.pem
-          docker context create my-remote-context --docker "host=tcp://${{ secrets.SERVER_IP }}:2376" --description "Remote context"
+          docker context create my-remote-context --docker "host=tcp://${{ secrets.SERVER_IP }}:2376,ca=ca.pem,cert=cert.pem,key=key.pem" --description "Remote context"
+          docker context ls
+          docker context inspect my-remote-context
 
       - name: Deploy Docker image to server
         if: github.ref == 'refs/heads/master'
         env:
-          DOCKER_CERT_PATH: $(pwd)
+          DOCKER_CERT_PATH: ${{ github.workspace }}
           DOCKER_TLS_VERIFY: 1
           DOCKER_HOST: tcp://${{ secrets.SERVER_IP }}:2376
           IMAGE_NAME: asdumitrescu/maven-app:${{ steps.bump_version.outputs.version }}
         run: |
-          docker --context my-remote-context pull $IMAGE_NAME
+          echo "Pulling image: $IMAGE_NAME"
+          docker --context my-remote-context --debug pull $IMAGE_NAME
+          echo "Stopping existing container (if any)"
           docker --context my-remote-context stop myapp || true
+          echo "Removing existing container (if any)"
           docker --context my-remote-context rm myapp || true
+          echo "Running new container"
           docker --context my-remote-context run -d --name myapp -p 8080:8080 $IMAGE_NAME
 
+      - name: Check Docker daemon info
+        if: failure()
+        run: |
+          docker --context my-remote-context version
+          docker --context my-remote-context info
+
+      - name: Debug connection
+        if: failure()
+        run: |
+          nc -zv ${{ secrets.SERVER_IP }} 2376
+          openssl s_client -connect ${{ secrets.SERVER_IP }}:2376 -cert cert.pem -key key.pem -CAfile ca.pem
