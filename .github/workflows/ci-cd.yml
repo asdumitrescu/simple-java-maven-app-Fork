@@ -10,6 +10,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    concurrency: ci-cd-pipeline-${{ github.ref }}
 
     steps:
       - name: Checkout repository
@@ -34,48 +35,25 @@ jobs:
       - name: Build with Maven
         run: mvn clean install
 
-      - name: Determine version increment
-        id: version
-        run: |
-          version=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          echo "Current version: $version"
-          if [[ "${GITHUB_REF}" == "refs/heads/master" ]]; then
-            new_version=$(echo $version | awk -F. -v OFS=. '{$NF++; print}')
-          elif [[ "${GITHUB_REF}" == refs/heads/hotfix/v* ]]; then
-            branch_version=$(basename $GITHUB_REF)
-            new_version=${branch_version#hotfix/v}
-          else
-            echo "Unsupported branch"
-            exit 1
-          fi
-          echo "New version: $new_version"
-          mvn versions:set -DnewVersion=$new_version
-          mvn versions:commit
-          echo "new_version=$new_version" >> $GITHUB_ENV
-
-      - name: Stash changes
-        run: |
-          git stash --include-untracked
-
-      - name: Pull changes with rebase
-        run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git pull --rebase origin ${{ github.ref }}
-
-      - name: Apply stashed changes
-        run: |
-          git stash pop || true
+      - name: Maven Version Bump Action
+        id: bump_version
+        uses: nnichols/maven-version-bump-action@v5
+        with:
+          release-type: patch
 
       - name: Commit new version
         run: |
           git add pom.xml
-          git commit -m "Increment version to ${{ env.new_version }}"
-          git push
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "Increment version to ${{ steps.bump_version.outputs.new_version }}"
+            git push
+          else
+            echo "No changes to commit"
+          fi
 
       - name: Print new version
         run: |
-          echo "New version: ${{ env.new_version }}"
+          echo "New version: ${{ steps.bump_version.outputs.new_version }}"
 
       - name: Build with Maven
         run: mvn clean package
@@ -85,7 +63,7 @@ jobs:
 
       - name: Build and push Docker image
         run: |
-          DOCKER_IMAGE_TAG="asdumitrescu/maven-app:${{ env.new_version }}"
+          DOCKER_IMAGE_TAG="asdumitrescu/maven-app:${{ steps.bump_version.outputs.new_version }}"
           echo "Building Docker image with tag: $DOCKER_IMAGE_TAG"
           docker build -t $DOCKER_IMAGE_TAG .
           echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
@@ -93,7 +71,7 @@ jobs:
 
       - name: Extract JAR from Docker image
         run: |
-          CONTAINER_ID=$(docker create asdumitrescu/maven-app:${{ env.new_version }})
+          CONTAINER_ID=$(docker create asdumitrescu/maven-app:${{ steps.bump_version.outputs.new_version }})
           docker cp $CONTAINER_ID:/app/app.jar ./app.jar
           docker rm $CONTAINER_ID
 
@@ -108,7 +86,7 @@ jobs:
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
-          IMAGE_NAME: asdumitrescu/maven-app:${{ env.new_version }}
+          IMAGE_NAME: asdumitrescu/maven-app:${{ steps.bump_version.outputs.new_version }}
           DOCKER_CONTEXT_CONFIG: ${{ secrets.DOCKER_CONTEXT_CONFIG }}
         run: |
           echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
