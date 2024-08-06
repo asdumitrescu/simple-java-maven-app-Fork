@@ -90,6 +90,7 @@ jobs:
           docker context ls
           docker context inspect my-remote-context
 
+
       - name: Deploy Docker image to server
         if: github.ref == 'refs/heads/master'
         env:
