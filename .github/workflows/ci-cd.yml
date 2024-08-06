@@ -84,17 +84,18 @@ jobs:
       - name: Create Docker context
         run: |
           echo "${{ secrets.CA_PEM }}" > ca.pem
-          echo "${{ secrets.CLIENT_CERT_PEM }}" > client-cert.pem
-          echo "${{ secrets.CLIENT_KEY_PEM }}" > client-key.pem
+          echo "${{ secrets.CLIENT_CERT_PEM }}" > cert.pem
+          echo "${{ secrets.CLIENT_KEY_PEM }}" > key.pem
           docker context create my-remote-context --docker "host=tcp://${{ secrets.SERVER_IP }}:2376" --description "Remote context"
 
       - name: Deploy Docker image to server
         if: github.ref == 'refs/heads/master'
         env:
+          DOCKER_CERT_PATH: $(pwd)
+          DOCKER_TLS_VERIFY: 1
+          DOCKER_HOST: tcp://${{ secrets.SERVER_IP }}:2376
           IMAGE_NAME: asdumitrescu/maven-app:${{ steps.bump_version.outputs.version }}
         run: |
-          export DOCKER_CERT_PATH=$(pwd)
-          export DOCKER_TLS_VERIFY=1
           docker --context my-remote-context pull $IMAGE_NAME
           docker --context my-remote-context stop myapp || true
           docker --context my-remote-context rm myapp || true
