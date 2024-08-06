@@ -64,6 +64,7 @@ jobs:
           docker cp $CONTAINER_ID:/app/app.jar ./app.jar
           docker rm $CONTAINER_ID
 
+
       - name: Upload JAR to GitHub Packages
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_GITLAB_ACTION }}
